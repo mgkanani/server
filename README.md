@@ -3,5 +3,5 @@ To download server package from github.com:-
 
 To create executable use below command(first make sure correctly setting of GOPATH and PATH env-variables):-
 	go install
-To run :-
+To run:-
 	server
