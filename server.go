@@ -4,23 +4,35 @@ import (
 	"fmt"
 	"io"
 	"net"
-	//"sync"
+	"os"
 	"strings"
+	"sync"
 )
 
-var m map[string]string
+var Map map[string]string
+
+//var mut sync.Mutex
+var mut sync.RWMutex
 
 func main() {
+	if len(os.Args) != 2 {
+		fmt.Println("format:-server ipaddr:port")
+		return
+	}
+	//ch := make(chan bool)
+	Map = make(map[string]string)
 
-	m = make(map[string]string)
-	//var wg sync.WaitGroup
+	socket := os.Args[1]
+	addr_port, err := net.ResolveTCPAddr("tcp", socket)
+	if err != nil {
+		fmt.Println("Address format is ipaddr:port_num")
+	}
+	ln, err := net.ListenTCP("tcp", addr_port)
+	if err != nil {
+		fmt.Println("use different port number, given port already in use", err.Error())
+	}
 
-	service := "0.0.0.0:12345"
-	tcpAddr, err := net.ResolveTCPAddr("tcp", service)
-	checkError(err)
-	ln, err := net.ListenTCP("tcp", tcpAddr)
-	checkError(err)
-	fmt.Println("Server listening at port number ", tcpAddr)
+	fmt.Println("Listening at addr:port", addr_port)
 	if err != nil {
 		fmt.Print(err)
 		return
@@ -40,13 +52,36 @@ func main() {
 	}
 }
 
-func checkError(err error) {
-	if err != nil {
-		fmt.Println("Fatal error ", err.Error())
-	}
+func Get_Val(key string) string {
+	return Map[key]
 }
 
-//func echo_srv(c net.Conn, wg sync.WaitGroup) {
+func Set_Val(key string, val string) {
+	Map[key] = val
+	return
+}
+
+func Update_Val(key string, val string) {
+	Map[key] = val
+	return
+}
+
+func Delete(key string) {
+	delete(Map, key)
+	return
+}
+
+func Rename(key1 string, key2 string) bool {
+	ok := true
+	_, ok = Map[key2] //first check key2 must not consist any-value.
+	if ok {
+		return !ok
+	}
+	Map[key2] = Map[key1]
+	delete(Map, key1)
+	return !ok
+}
+
 func echo_srv(c net.Conn) {
 	defer c.Close()
 
@@ -69,20 +104,35 @@ func echo_srv(c net.Conn) {
 
 		fmt.Printf("msg=%s\n", msg)
 		//fmt.Println(str[0]=="get",str[1])
+		action := str[0]
 		key := str[1]
-		if str[0] == "set" {
+		switch {
+
+		case action == "set":
 			val := str[2]
-			m[key] = val
+			mut.Lock()
+			//Map[key] = val
+			Set_Val(key, val)
+			mut.Unlock()
 			fmt.Printf("m[%s]=%s", str[1], str[2])
-		}
-		if str[0] == "get" {
-			fmt.Printf("s m[%s]=%s e\n", str[1], m[key])
-			fmt.Printf("s m[%s]=%s e\n", str[1], m["abc"])
+
+		case action == "update":
+			val := str[2]
+			mut.Lock()
+			//Map[key] = val
+			Update_Val(key, val)
+			mut.Unlock()
+			fmt.Printf("m[%s]=%s", str[1], str[2])
+
+		case action == "get":
+			fmt.Printf("s Map[%s]=%s e\n", str[1], Map[key])
+			fmt.Printf("s Map[%s]=%s e\n", str[1], Map["abc"])
 			//temp:=string(strings.TrimSpace(str[1]));
-			temp := []byte(m[key])
+			mut.RLock()
+			//temp := []byte(Map[key])
+			temp := []byte(Get_Val(key))
+			mut.RUnlock()
 			fmt.Println(temp)
-			//fmt.Println(m,"checking",m["h"],"m[1]",str[1],"m[temp]=",temp=="hel")
-			//n, err = c.Write([]byte(m[key]))
 			n, err = c.Write(temp)
 			if n == 0 {
 				n, err = c.Write([]byte("\n"))
